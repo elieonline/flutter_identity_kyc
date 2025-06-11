@@ -1,0 +1,58 @@
+buildscript {
+    ext {
+        // Define default versions
+        gradle_version = '7.4.2' // Updated Android Gradle Plugin version
+        kotlin_version = '1.9.0'
+    }
+    repositories {
+        google()
+        mavenCentral() // Replaced jcenter with mavenCentral
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:$gradle_version"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+plugins {
+    id "com.android.library"
+    id "kotlin-android"
+}
+
+group 'com.kayyode.flutter_identity_kyc'
+version '1.0-SNAPSHOT'
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral() // Replaced jcenter with mavenCentral
+    }
+}
+
+android {
+    // Define default SDK versions if not provided by the root project
+    def defaultCompileSdkVersion = 34 // Align with current Flutter recommendations
+    def defaultMinSdkVersion = 21     // Common minimum version for Flutter
+
+    compileSdkVersion rootProject.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : defaultCompileSdkVersion
+    namespace 'com.flutter_identity_kyc' // Corrected namespace
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+    defaultConfig {
+        minSdkVersion rootProject.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : defaultMinSdkVersion
+    }
+    // It's good practice for libraries to not specify targetSdkVersion, letting the app define it.
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version" // Uncommented Kotlin standard library
+}
