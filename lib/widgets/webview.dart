@@ -48,8 +48,7 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
       _errorMessage = null; // Clear previous errors
     });
 
-    final String apiUrl =
-        'https://api.prembly.com/identitypass/internal/checker/sdk/widget/initialize';
+    final String apiUrl = 'https://api.prembly.com/identitypass/internal/checker/sdk/widget/initialize';
 
     // Prepare the request body
     final Map<String, dynamic> requestBody = {
@@ -64,18 +63,13 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
-        headers: {
-          'accept': '*/*',
-          'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
-          'content-type': 'application/json'
-        },
+        headers: {'accept': '*/*', 'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8', 'content-type': 'application/json'},
         body: json.encode(requestBody),
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
-        if (responseData['status'] == true &&
-            responseData.containsKey('widget_id')) {
+        if (responseData['status'] == true && responseData.containsKey('widget_id')) {
           final String widgetId = responseData['widget_id'];
           setState(() {
             _webViewUrl = "https://dev.d1gc80n5odr0sp.amplifyapp.com/$widgetId";
@@ -84,8 +78,7 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
         } else {
           // API call successful but response indicates an error or missing widget_id
           setState(() {
-            _errorMessage =
-                responseData['detail'] ?? 'Failed to get widget ID from API.';
+            _errorMessage = responseData['detail'] ?? 'Failed to get widget ID from API.';
             _isLoading = false;
           });
           widget.onError({"status": "api_error", "message": _errorMessage});
@@ -93,8 +86,7 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
       } else {
         // API call failed with a non-200 status code
         setState(() {
-          _errorMessage =
-              'API call failed with status: ${response.statusCode}. Response: ${response.body}';
+          _errorMessage = 'API call failed with status: ${response.statusCode}. Response: ${response.body}';
           _isLoading = false;
         });
         widget.onError({"status": "api_error", "message": _errorMessage});
@@ -114,8 +106,8 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
     // Note: GlobalKey<NavigatorState> is not needed here as we are not pushing/popping routes
     // within this widget's Navigator. The MaterialPageRoute handles it.
 
-    return WillPopScope(
-      onWillPop: () async => false, // Prevents popping the route
+    return PopScope(
+      canPop: false, // Prevents popping the route
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
@@ -137,14 +129,12 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline,
-                                color: Colors.red, size: 50),
+                            const Icon(Icons.error_outline, color: Colors.red, size: 50),
                             const SizedBox(height: 16),
                             Text(
                               "Error: $_errorMessage",
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  color: Colors.red, fontSize: 16),
+                              style: const TextStyle(color: Colors.red, fontSize: 16),
                             ),
                             const SizedBox(height: 20),
                             ElevatedButton(
@@ -152,8 +142,7 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                               child: const Text("Retry"),
                             ),
                             TextButton(
-                              onPressed: () => widget
-                                  .onCancel({"status": "error_display_closed"}),
+                              onPressed: () => widget.onCancel({"status": "error_display_closed"}),
                               child: const Text("Cancel"),
                             ),
                           ],
@@ -162,19 +151,32 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                     )
                   : InAppWebView(
                       onPermissionRequest: (controller, request) async {
-                        try {
+                        // Log the requested resources for debugging.
+                        debugPrint("WebView permission request for: ${request.resources}");
+
+                        // Determine if the request is for camera or microphone.
+                        // The web page can request these individually or, on iOS, as a combined type.
+                        bool wantsCamera = request.resources.any((res) => res == PermissionResourceType.CAMERA);
+                        bool wantsMicrophone = request.resources.any((res) => res == PermissionResourceType.MICROPHONE);
+                        bool wantsCameraAndMicrophoneIOS =
+                            request.resources.any((res) => res == PermissionResourceType.CAMERA_AND_MICROPHONE);
+
+                        if (wantsCamera || wantsMicrophone || wantsCameraAndMicrophoneIOS) {
+                          // If camera or microphone permissions are requested, grant them.
+                          // It's crucial to pass back the original `request.resources` list.
+                          debugPrint("Granting permissions for: ${request.resources}");
                           return PermissionResponse(
-                              action: PermissionResponseAction.GRANT,
-                              resources: [
-                                PermissionResourceType.CAMERA_AND_MICROPHONE,
-                              ]);
-                        } catch (e) {
-                          return PermissionResponse(
-                              action: PermissionResponseAction.PROMPT,
-                              resources: [
-                                PermissionResourceType.CAMERA_AND_MICROPHONE,
-                              ]);
+                            resources: request.resources, // Use the resources from the original request.
+                            action: PermissionResponseAction.GRANT,
+                          );
                         }
+
+                        // For any other types of permission requests, deny them.
+                        debugPrint("Denying permissions for: ${request.resources}");
+                        return PermissionResponse(
+                          resources: request.resources, // Use the resources from the original request.
+                          action: PermissionResponseAction.DENY,
+                        );
                       },
                       initialUrlRequest: URLRequest(
                         url: WebUri(_webViewUrl!), // Use the generated URL
@@ -212,20 +214,17 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                                       break;
                                     default:
                                       // Handle unknown events gracefully
-                                      print(
-                                          "Received unknown event from WebView: ${response['event']}");
+                                      print("Received unknown event from WebView: ${response['event']}");
                                       break;
                                   }
                                 }
                               } else {
                                 // Handle cases where args[0] is not a String or args is empty
-                                print(
-                                    "Received non-string data from JavaScript handler: ${args}");
+                                print("Received non-string data from JavaScript handler: ${args}");
                                 // Optionally, call onError or log a specific message for this case
                                 widget.onError({
                                   "status": "error",
-                                  "message":
-                                      "Received unexpected data type from WebView: $args",
+                                  "message": "Received unexpected data type from WebView: $args",
                                 });
                               }
                             } catch (e) {
@@ -236,8 +235,7 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                               }
                               widget.onError({
                                 "status": "error",
-                                "message":
-                                    "Failed to process message from WebView: $e",
+                                "message": "Failed to process message from WebView: $e",
                               });
                             }
                           },
@@ -248,8 +246,7 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                         ConsoleMessage consoleMessage,
                       ) {
                         print("WEB CONSOLE: ${consoleMessage.message}");
-                        print(
-                            "WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
+                        print("WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
                       },
                       onLoadStop: (controller, url) async {
                         // This JavaScript is for the web page to send messages back to Flutter.
@@ -276,16 +273,6 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                                 console.error('Error accessing camera/microphone in web content via getUserMedia test: ' + err.name + ': ' + err.message);
                               });
                           """,
-                        );
-                      },
-                      androidOnPermissionRequest: (
-                        InAppWebViewController controller,
-                        String origin,
-                        List<String> resources,
-                      ) async {
-                        return PermissionRequestResponse(
-                          resources: resources,
-                          action: PermissionRequestResponseAction.GRANT,
                         );
                       },
                       // Removed gestureRecognizers as it's typically not needed and can cause issues

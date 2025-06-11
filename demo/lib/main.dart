@@ -20,11 +20,10 @@ class MyAppState extends State<MyApp> {
     requestPermissions();
   }
 
-  Future<void> Function() requestPermissions = () async {
-    await Permission.camera.request().isGranted;
-
+  Future<void> requestPermissions() async {
+    await Permission.camera.request();
     await Permission.microphone.request();
-  };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,12 +45,12 @@ class MyAppState extends State<MyApp> {
                       userRef: "1234",
                       config: "",
                       onCancel: (response) {
-                        print(response);
+                        debugPrint(response?.toString());
                       },
                       onVerified: (response) {
-                        print(response);
+                        debugPrint(response?.toString());
                       },
-                      onError: (error) => print(error),
+                      onError: (error) => debugPrint(error?.toString()),
                     ),
                   );
                 },

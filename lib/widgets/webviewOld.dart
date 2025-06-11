@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -32,8 +30,8 @@ class IdentityKYCWebView extends StatelessWidget {
     InAppWebViewController _webViewController;
     final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-    return new WillPopScope(
-      onWillPop: () async => false,
+    return new PopScope(
+      canPop: false,
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
@@ -44,17 +42,13 @@ class IdentityKYCWebView extends StatelessWidget {
                 builder: (context) => InAppWebView(
                   onPermissionRequest: (controller, request) async {
                     try {
-                      return PermissionResponse(
-                          action: PermissionResponseAction.GRANT,
-                          resources: [
-                            PermissionResourceType.CAMERA_AND_MICROPHONE,
-                          ]);
+                      return PermissionResponse(action: PermissionResponseAction.GRANT, resources: [
+                        PermissionResourceType.CAMERA_AND_MICROPHONE,
+                      ]);
                     } catch (e) {
-                      return PermissionResponse(
-                          action: PermissionResponseAction.PROMPT,
-                          resources: [
-                            PermissionResourceType.CAMERA_AND_MICROPHONE,
-                          ]);
+                      return PermissionResponse(action: PermissionResponseAction.PROMPT, resources: [
+                        PermissionResourceType.CAMERA_AND_MICROPHONE,
+                      ]);
                     }
                   },
                   initialUrlRequest: URLRequest(
@@ -100,8 +94,7 @@ class IdentityKYCWebView extends StatelessWidget {
                             }
                           } else {
                             // Handle cases where args[0] is not a String or args is empty
-                            print(
-                                "Received non-string data from JavaScript handler: ${args}");
+                            print("Received non-string data from JavaScript handler: ${args}");
                             // Optionally, call onError or log a specific message for this case
                           }
                         } catch (e) {
@@ -112,8 +105,7 @@ class IdentityKYCWebView extends StatelessWidget {
                           }
                           onError({
                             "status": "error",
-                            "message":
-                                "Failed to process message from WebView: $e",
+                            "message": "Failed to process message from WebView: $e",
                           });
                         }
                       },
@@ -124,8 +116,7 @@ class IdentityKYCWebView extends StatelessWidget {
                     ConsoleMessage consoleMessage,
                   ) {
                     print("WEB CONSOLE: ${consoleMessage.message}");
-                    print(
-                        "WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
+                    print("WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
                   },
                   onLoadStop: (controller, url) async {
                     await controller.evaluateJavascript(
@@ -147,16 +138,7 @@ class IdentityKYCWebView extends StatelessWidget {
     """,
                     );
                   },
-                  androidOnPermissionRequest: (
-                    InAppWebViewController controller,
-                    String origin,
-                    List<String> resources,
-                  ) async {
-                    return PermissionRequestResponse(
-                      resources: resources,
-                      action: PermissionRequestResponseAction.GRANT,
-                    );
-                  },
+
                   // onLoadStop: (controller, url) async {
                   //   await controller.evaluateJavascript(
                   //     source: """
