@@ -32,7 +32,7 @@ class InputParameters {
   final Function onError;
 
   //builder
-  final Function(Widget child)? builder;
+  final Widget Function(Widget child)? builder;
 
   //use safe area
   final bool useSafeArea;
