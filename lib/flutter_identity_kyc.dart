@@ -31,17 +31,30 @@ class InputParameters {
   // on error callback
   final Function onError;
 
-  InputParameters(
-      {required this.context,
-      required this.merchantKey,
-      required this.email,
-      required this.firstName,
-      required this.lastName,
-      required this.userRef,
-      required this.config,
-      required this.onCancel,
-      required this.onVerified,
-      required this.onError});
+  //builder
+  final Function(Widget child)? builder;
+
+  //use safe area
+  final bool useSafeArea;
+
+  //use bottomsheet
+  final bool useBottomSheet;
+
+  InputParameters({
+    required this.context,
+    required this.merchantKey,
+    required this.email,
+    this.firstName,
+    this.lastName,
+    this.userRef,
+    required this.config,
+    required this.onCancel,
+    required this.onVerified,
+    required this.onError,
+    this.builder,
+    this.useSafeArea = true,
+    this.useBottomSheet = true,
+  });
 }
 
 class FlutterIdentityKyc {
@@ -93,24 +106,40 @@ class FlutterIdentityKyc {
       parameters.onError(data);
     }
 
+    Widget child = IdentityKYCWebView(
+      merchantKey: parameters.merchantKey,
+      firstName: parameters.firstName,
+      lastName: parameters.lastName,
+      userRef: parameters.userRef,
+      email: parameters.email,
+      config: parameters.config,
+      onCancel: onCancelHandler,
+      onError: onErrorHandler,
+      onVerified: onSuccessHandler,
+    );
+
+    if (parameters.useBottomSheet) {
+      return showModalBottomSheet(
+        context: parameters.context,
+        isDismissible: false,
+        enableDrag: false,
+        isScrollControlled: true,
+        useSafeArea: parameters.useSafeArea,
+        builder: (_) => parameters.builder != null ? parameters.builder!(child) : child,
+      );
+    }
+
     return showDialog(
       context: parameters.context,
+      barrierDismissible: false,
+      useSafeArea: parameters.useSafeArea,
       builder: (context) {
         /*
         this show the verification widget
         */
-        return Scaffold(
-            body: IdentityKYCWebView(
-          merchantKey: parameters.merchantKey,
-          firstName: parameters.firstName,
-          lastName: parameters.lastName,
-          userRef: parameters.userRef,
-          email: parameters.email,
-          config: parameters.config,
-          onCancel: onCancelHandler,
-          onError: onErrorHandler,
-          onVerified: onSuccessHandler,
-        ));
+        return Dialog.fullscreen(
+          child: parameters.builder != null ? parameters.builder!(child) : child,
+        );
       },
     );
   }

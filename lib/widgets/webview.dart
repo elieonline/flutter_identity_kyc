@@ -110,173 +110,179 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
       canPop: false, // Prevents popping the route
       child: Material(
         type: MaterialType.transparency,
-        child: SafeArea(
-          child: _isLoading
-              ? const Center(
+        child: Builder(
+          builder: (_) {
+            if (_isLoading) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text("Initializing secure session..."),
+                  ],
+                ),
+              );
+            }
+
+            if (_errorMessage != null) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text("Initializing secure session..."),
+                      const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Error: $_errorMessage",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.red, fontSize: 16),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: _initializePremblyWidget,
+                        child: const Text("Retry"),
+                      ),
+                      TextButton(
+                        onPressed: () => widget.onCancel({"status": "error_display_closed"}),
+                        child: const Text("Cancel"),
+                      ),
                     ],
                   ),
-                )
-              : _errorMessage != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 50),
-                            const SizedBox(height: 16),
-                            Text(
-                              "Error: $_errorMessage",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.red, fontSize: 16),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: _initializePremblyWidget,
-                              child: const Text("Retry"),
-                            ),
-                            TextButton(
-                              onPressed: () => widget.onCancel({"status": "error_display_closed"}),
-                              child: const Text("Cancel"),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : InAppWebView(
-                      onPermissionRequest: (controller, request) async {
-                        // Log the requested resources for debugging.
-                        debugPrint("WebView permission request for: ${request.resources}");
+                ),
+              );
+            }
 
-                        // Determine if the request is for camera or microphone.
-                        // The web page can request these individually or, on iOS, as a combined type.
-                        bool wantsCamera = request.resources.any((res) => res == PermissionResourceType.CAMERA);
-                        bool wantsMicrophone = request.resources.any((res) => res == PermissionResourceType.MICROPHONE);
-                        bool wantsCameraAndMicrophoneIOS =
-                            request.resources.any((res) => res == PermissionResourceType.CAMERA_AND_MICROPHONE);
+            return InAppWebView(
+              onPermissionRequest: (controller, request) async {
+                // Log the requested resources for debugging.
+                debugPrint("WebView permission request for: ${request.resources}");
 
-                        if (wantsCamera || wantsMicrophone || wantsCameraAndMicrophoneIOS) {
-                          // If camera or microphone permissions are requested, grant them.
-                          // It's crucial to pass back the original `request.resources` list.
-                          debugPrint("Granting permissions for: ${request.resources}");
-                          return PermissionResponse(
-                            resources: request.resources, // Use the resources from the original request.
-                            action: PermissionResponseAction.GRANT,
-                          );
-                        }
+                // Determine if the request is for camera or microphone.
+                // The web page can request these individually or, on iOS, as a combined type.
+                bool wantsCamera = request.resources.any((res) => res == PermissionResourceType.CAMERA);
+                bool wantsMicrophone = request.resources.any((res) => res == PermissionResourceType.MICROPHONE);
+                bool wantsCameraAndMicrophoneIOS =
+                    request.resources.any((res) => res == PermissionResourceType.CAMERA_AND_MICROPHONE);
 
-                        // For any other types of permission requests, deny them.
-                        debugPrint("Denying permissions for: ${request.resources}");
-                        return PermissionResponse(
-                          resources: request.resources, // Use the resources from the original request.
-                          action: PermissionResponseAction.DENY,
-                        );
-                      },
-                      initialUrlRequest: URLRequest(
-                        url: WebUri(_webViewUrl!), // Use the generated URL
-                      ),
-                      initialSettings: InAppWebViewSettings(
-                        mediaPlaybackRequiresUserGesture: false,
-                        allowsInlineMediaPlayback: true,
-                      ),
-                      onWebViewCreated: (InAppWebViewController controller) {
-                        _webViewController = controller;
-                        _webViewController!.addJavaScriptHandler(
-                          // Use nullable accessor
-                          handlerName: 'message',
-                          callback: (args) {
-                            try {
-                              // Ensure args is not empty and the first element is a String
-                              if (args.isNotEmpty && args[0] is String) {
-                                Map response = json.decode(args[0]);
-                                if (response.containsKey("event")) {
-                                  switch (response["event"]) {
-                                    case "closed":
-                                      widget.onCancel({"status": "closed"});
-                                      break;
-                                    case "error":
-                                      widget.onError({
-                                        "status": "error",
-                                        "message": response['message'],
-                                      });
-                                      break;
-                                    case "verified":
-                                      widget.onVerified({
-                                        "status": "success",
-                                        "data": response,
-                                      });
-                                      break;
-                                    default:
-                                      // Handle unknown events gracefully
-                                      print("Received unknown event from WebView: ${response['event']}");
-                                      break;
-                                  }
-                                }
-                              } else {
-                                // Handle cases where args[0] is not a String or args is empty
-                                print("Received non-string data from JavaScript handler: ${args}");
-                                // Optionally, call onError or log a specific message for this case
-                                widget.onError({
-                                  "status": "error",
-                                  "message": "Received unexpected data type from WebView: $args",
-                                });
-                              }
-                            } catch (e) {
-                              print("Error decoding JSON from WebView: $e");
-                              // Log the raw args[0] for debugging
-                              if (args.isNotEmpty) {
-                                print("Raw data from WebView: ${args[0]}");
-                              }
+                if (wantsCamera || wantsMicrophone || wantsCameraAndMicrophoneIOS) {
+                  // If camera or microphone permissions are requested, grant them.
+                  // It's crucial to pass back the original `request.resources` list.
+                  debugPrint("Granting permissions for: ${request.resources}");
+                  return PermissionResponse(
+                    resources: request.resources, // Use the resources from the original request.
+                    action: PermissionResponseAction.GRANT,
+                  );
+                }
+
+                // For any other types of permission requests, deny them.
+                debugPrint("Denying permissions for: ${request.resources}");
+                return PermissionResponse(
+                  resources: request.resources, // Use the resources from the original request.
+                  action: PermissionResponseAction.DENY,
+                );
+              },
+              initialUrlRequest: URLRequest(
+                url: WebUri(_webViewUrl!), // Use the generated URL
+              ),
+              initialSettings: InAppWebViewSettings(
+                mediaPlaybackRequiresUserGesture: false,
+                allowsInlineMediaPlayback: true,
+              ),
+              onWebViewCreated: (InAppWebViewController controller) {
+                _webViewController = controller;
+                _webViewController!.addJavaScriptHandler(
+                  // Use nullable accessor
+                  handlerName: 'message',
+                  callback: (args) {
+                    try {
+                      // Ensure args is not empty and the first element is a String
+                      if (args.isNotEmpty && args[0] is String) {
+                        Map response = json.decode(args[0]);
+                        if (response.containsKey("event")) {
+                          switch (response["event"]) {
+                            case "closed":
+                              widget.onCancel({"status": "closed"});
+                              break;
+                            case "error":
                               widget.onError({
                                 "status": "error",
-                                "message": "Failed to process message from WebView: $e",
+                                "message": response['message'],
                               });
-                            }
-                          },
-                        );
-                      },
-                      onConsoleMessage: (
-                        InAppWebViewController controller,
-                        ConsoleMessage consoleMessage,
-                      ) {
-                        print("WEB CONSOLE: ${consoleMessage.message}");
-                        print("WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
-                      },
-                      onLoadStop: (controller, url) async {
-                        // This JavaScript is for the web page to send messages back to Flutter.
-                        // It does NOT initiate camera access. The web page itself must do that.
-                        await controller.evaluateJavascript(
-                          source: """
-                            window.addEventListener("message", (event) => {
-                              window.flutter_inappwebview
-                                  .callHandler('message', event.data);
-                            }, false);
-                          """,
-                        );
+                              break;
+                            case "verified":
+                              widget.onVerified({
+                                "status": "success",
+                                "data": response,
+                              });
+                              break;
+                            default:
+                              // Handle unknown events gracefully
+                              print("Received unknown event from WebView: ${response['event']}");
+                              break;
+                          }
+                        }
+                      } else {
+                        // Handle cases where args[0] is not a String or args is empty
+                        print("Received non-string data from JavaScript handler: ${args}");
+                        // Optionally, call onError or log a specific message for this case
+                        widget.onError({
+                          "status": "error",
+                          "message": "Received unexpected data type from WebView: $args",
+                        });
+                      }
+                    } catch (e) {
+                      print("Error decoding JSON from WebView: $e");
+                      // Log the raw args[0] for debugging
+                      if (args.isNotEmpty) {
+                        print("Raw data from WebView: ${args[0]}");
+                      }
+                      widget.onError({
+                        "status": "error",
+                        "message": "Failed to process message from WebView: $e",
+                      });
+                    }
+                  },
+                );
+              },
+              onConsoleMessage: (
+                InAppWebViewController controller,
+                ConsoleMessage consoleMessage,
+              ) {
+                print("WEB CONSOLE: ${consoleMessage.message}");
+                print("WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
+              },
+              onLoadStop: (controller, url) async {
+                // This JavaScript is for the web page to send messages back to Flutter.
+                // It does NOT initiate camera access. The web page itself must do that.
+                await controller.evaluateJavascript(
+                  source: """
+                          window.addEventListener("message", (event) => {
+                            window.flutter_inappwebview
+                                .callHandler('message', event.data);
+                          }, false);
+                        """,
+                );
 
-                        // Optional: Add a check for camera access from the web page for debugging
-                        // This is just a test to see if the browser API works, not to start the camera itself
-                        await controller.evaluateJavascript(
-                          source: """
-                            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                              .then(function(stream) {
-                                console.log('Camera and microphone access granted to web content!');
-                                stream.getTracks().forEach(track => track.stop()); // Stop tracks immediately after testing
-                              })
-                              .catch(function(err) {
-                                console.error('Error accessing camera/microphone in web content via getUserMedia test: ' + err.name + ': ' + err.message);
-                              });
-                          """,
-                        );
-                      },
-                      // Removed gestureRecognizers as it's typically not needed and can cause issues
-                    ),
+                // Optional: Add a check for camera access from the web page for debugging
+                // This is just a test to see if the browser API works, not to start the camera itself
+                await controller.evaluateJavascript(
+                  source: """
+                          navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                            .then(function(stream) {
+                              console.log('Camera and microphone access granted to web content!');
+                              stream.getTracks().forEach(track => track.stop()); // Stop tracks immediately after testing
+                            })
+                            .catch(function(err) {
+                              console.error('Error accessing camera/microphone in web content via getUserMedia test: ' + err.name + ': ' + err.message);
+                            });
+                        """,
+                );
+              },
+              // Removed gestureRecognizers as it's typically not needed and can cause issues
+            );
+          },
         ),
       ),
     );

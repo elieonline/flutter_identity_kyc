@@ -51,6 +51,17 @@ class MyAppState extends State<MyApp> {
                         debugPrint(response?.toString());
                       },
                       onError: (error) => debugPrint(error?.toString()),
+                      // useSafeArea: false,
+                      builder: (child) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),
+                          child: child,
+                        );
+                      },
                     ),
                   );
                 },
