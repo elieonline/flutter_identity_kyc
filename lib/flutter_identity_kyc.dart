@@ -125,6 +125,10 @@ class FlutterIdentityKyc {
         enableDrag: false,
         isScrollControlled: true,
         useSafeArea: parameters.useSafeArea,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
         builder: (_) => parameters.builder != null ? parameters.builder!(child) : child,
       );
     }
