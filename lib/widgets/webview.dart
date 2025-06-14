@@ -36,6 +36,9 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
   bool _isLoading = true; // To show loader
   String? _errorMessage; // To show error messages if API call fails
 
+  DateTime? _lastEventTime;
+  Duration debounceDuration = Duration(milliseconds: 500);
+
   @override
   void initState() {
     super.initState();
@@ -98,6 +101,16 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
         _isLoading = false;
       });
       widget.onError({"status": "network_error", "message": _errorMessage});
+    }
+  }
+
+  void _handleWebViewEvent(VoidCallback callback) {
+    DateTime now = DateTime.now();
+    if (_lastEventTime == null || now.difference(_lastEventTime!) > debounceDuration) {
+      _lastEventTime = now;
+      callback();
+    } else {
+      debugPrint("Ignored duplicate event");
     }
   }
 
@@ -196,53 +209,92 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                   // Use nullable accessor
                   handlerName: 'message',
                   callback: (args) {
-                    try {
-                      // Ensure args is not empty and the first element is a String
-                      if (args.isNotEmpty && args[0] is String) {
-                        Map response = json.decode(args[0]);
-                        if (response.containsKey("event")) {
-                          switch (response["event"]) {
-                            case "closed":
-                              widget.onCancel({"status": "closed"});
-                              break;
-                            case "error":
-                              widget.onError({
-                                "status": "error",
-                                "message": response['message'],
-                              });
-                              break;
-                            case "verified":
-                              widget.onVerified({
-                                "status": "success",
-                                "data": response,
-                              });
-                              break;
-                            default:
-                              // Handle unknown events gracefully
-                              print("Received unknown event from WebView: ${response['event']}");
-                              break;
+                    _handleWebViewEvent(() {
+                      try {
+                        // Ensure args is not empty and the first element is a String
+                        if (args.isNotEmpty && args[0] is String) {
+                          Map response = json.decode(args[0]);
+                          if (response.containsKey("event")) {
+                            switch (response["event"]) {
+                              case "closed":
+                                widget.onCancel({"status": "closed"});
+                                break;
+                              case "error":
+                                widget.onError({
+                                  "status": "error",
+                                  "message": response['message'],
+                                });
+                                break;
+                              case "verified":
+                                widget.onVerified({
+                                  "status": "success",
+                                  "data": response,
+                                });
+                                break;
+                              default:
+                                // Handle unknown events gracefully
+                                debugPrint("Received unknown event from WebView: ${response['event']}");
+                                break;
+                            }
                           }
+                        } else if (args.isNotEmpty && args[0] is Map) {
+                          Map response = args[0];
+                          if (response.containsKey("data")) {
+                            Map data = response["data"];
+                            if (data.containsKey("status")) {
+                              switch (data["status"]) {
+                                case "failed":
+                                  if (("${data["message"] ?? ''}".toLowerCase().contains('cancel'))) {
+                                    widget.onCancel({
+                                      "status": "cancelled",
+                                      "message": data["message"],
+                                    });
+                                    break;
+                                  }
+                                  widget.onError({
+                                    "status": "failed",
+                                    "message": data['message'],
+                                  });
+                                  break;
+                                case "success":
+                                  widget.onVerified({
+                                    "status": "success",
+                                    "data": data,
+                                  });
+                                  break;
+                                default:
+                                  // Handle unknown events gracefully
+                                  widget.onError({
+                                    "status": data["status"],
+                                    "message": data['message'],
+                                  });
+                                  break;
+                              }
+                            }
+                          }
+                        } else {
+                          // Handle cases where args[0] is not a String or args is empty
+                          debugPrint("Received non-string data from JavaScript handler: ${args}");
+                          // Optionally, call onError or log a specific message for this case
+                          widget.onError({
+                            "status": "error",
+                            "message": "Received unexpected data type from WebView: $args",
+                          });
                         }
-                      } else {
-                        // Handle cases where args[0] is not a String or args is empty
-                        print("Received non-string data from JavaScript handler: ${args}");
-                        // Optionally, call onError or log a specific message for this case
-                        widget.onError({
-                          "status": "error",
-                          "message": "Received unexpected data type from WebView: $args",
-                        });
+                      } catch (e) {
+                        debugPrint("Error decoding JSON from WebView: $e");
+                        // Log the raw args[0] for debugging
+                        if (args.isNotEmpty) {
+                          debugPrint("Raw data from WebView: ${args[0]}");
+                        }
+                        widget.onError(
+                          {
+                            "status": "error",
+                            "message": "Failed to process message from WebView: $e",
+                          },
+                        );
                       }
-                    } catch (e) {
-                      print("Error decoding JSON from WebView: $e");
-                      // Log the raw args[0] for debugging
-                      if (args.isNotEmpty) {
-                        print("Raw data from WebView: ${args[0]}");
-                      }
-                      widget.onError({
-                        "status": "error",
-                        "message": "Failed to process message from WebView: $e",
-                      });
-                    }
+                    });
                   },
                 );
               },
@@ -250,10 +302,25 @@ class _IdentityKYCWebViewState extends State<IdentityKYCWebView> {
                 InAppWebViewController controller,
                 ConsoleMessage consoleMessage,
               ) {
-                print("WEB CONSOLE: ${consoleMessage.message}");
-                print("WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
+                debugPrint("WEB CONSOLE: ${consoleMessage.message}");
+                debugPrint("WEB CONSOLE SOURCE ID: ${consoleMessage.messageLevel}");
               },
               onLoadStop: (controller, url) async {
+                //This Javascript is for updating the background color
+                await controller.evaluateJavascript(source: """
+                  var style = document.createElement('style');
+                  style.innerHTML = ".main-modal { background-color: rgba(255, 255, 255) !important; }";
+                  document.head.appendChild(style);
+                """);
+
+                //This Javascript is used to disable the auto-zoom when input is focused
+                await controller.evaluateJavascript(source: """
+                  var meta = document.createElement('meta');
+                  meta.name = 'viewport';
+                  meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+                  document.getElementsByTagName('head')[0].appendChild(meta);
+                """);
+
                 // This JavaScript is for the web page to send messages back to Flutter.
                 // It does NOT initiate camera access. The web page itself must do that.
                 await controller.evaluateJavascript(
